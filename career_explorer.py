@@ -1,6 +1,8 @@
 import streamlit as st
 import itertools
 from collections import defaultdict
+import networkx as nx
+import matplotlib.pyplot as plt
 
 # ==============================
 # LEVEL 0 — DATA MODEL
@@ -190,9 +192,41 @@ with col1:
     st.subheader("🔢 Combinazioni generate")
     st.metric("Totale combinazioni", len(combos))
 
-    with st.expander("Mostra prime 50"):
-        for c in combos[:50]:
+    with st.expander("Mostra tutte le combinazioni"):
+        st.caption("Suggerimento: usa filtri e paginazione per esplorare molte combinazioni.")
+
+        min_len, max_len = st.slider(
+            "Filtra per lunghezza combinazione",
+            min_value=1,
+            max_value=max(1, len(interests)),
+            value=(1, max(1, len(interests))),
+        )
+
+        search_term = st.text_input(
+            "Cerca un interesse dentro le combinazioni",
+            value="",
+            placeholder="es. tecnologia",
+        ).strip().lower()
+
+        filtered_combos = [
+            c for c in combos
+            if min_len <= len(c) <= max_len
+            and (not search_term or search_term in " ".join(c).lower())
+        ]
+
+        st.metric("Combinazioni mostrate", len(filtered_combos))
+
+        page_size = st.selectbox("Elementi per pagina", [25, 50, 100, 250], index=1)
+        total_pages = max(1, (len(filtered_combos) + page_size - 1) // page_size)
+        page = st.number_input("Pagina", min_value=1, max_value=total_pages, value=1, step=1)
+
+        start = (page - 1) * page_size
+        end = start + page_size
+
+        for c in filtered_combos[start:end]:
             st.write("• " + " + ".join(c))
+
+        st.caption(f"Pagina {page} di {total_pages}")
 
 # ==============================
 # LEVEL 2 — ranking jobs
@@ -218,6 +252,47 @@ with col2:
             st.write(job["description"])
             st.caption("Tag: " + ", ".join(sorted(job["tags"])))
             st.progress(min(score, 1.0))
+
+# ==============================
+# LEVEL 2.5 — MAPPA INTERATTIVA (GRAPH)
+# ==============================
+
+st.subheader("🕸️ Mappa interessi ↔ lavori")
+
+with st.expander("Mostra mappa interattiva"):
+    if scored:
+        G = nx.Graph()
+
+        # nodi interessi
+        for i in interests:
+            G.add_node(i, node_type="interest")
+
+        # nodi lavori (solo top 10)
+        top_jobs = [job for _, job in scored[:10]]
+        for job in top_jobs:
+            G.add_node(job["name"], node_type="job")
+            for tag in job["tags"]:
+                if tag in interests:
+                    G.add_edge(iֆ:=tag, job["name"])
+
+        fig = plt.figure(figsize=(10, 7))
+        pos = nx.spring_layout(G, seed=42)
+
+        interest_nodes = [n for n, d in G.nodes(data=True) if d.get("node_type") == "interest"]
+        job_nodes = [n for n, d in G.nodes(data=True) if d.get("node_type") == "job"]
+
+        nx.draw_networkx_nodes(G, pos, nodelist=interest_nodes, node_size=700)
+        nx.draw_networkx_nodes(G, pos, nodelist=job_nodes, node_size=1200)
+        nx.draw_networkx_edges(G, pos, alpha=0.5)
+        nx.draw_networkx_labels(G, pos, font_size=9)
+
+        plt.axis("off")
+        st.pyplot(fig)
+        plt.close(fig)
+
+        st.caption("I nodi piccoli sono interessi, quelli grandi sono lavori consigliati. Le linee mostrano le connessioni tramite tag condivisi.")
+    else:
+        st.info("Aggiungi interessi per generare la mappa.")
 
 # ==============================
 # LEVEL 3 — AI-like suggestions
