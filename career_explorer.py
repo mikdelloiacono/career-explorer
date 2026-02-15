@@ -1,7 +1,10 @@
 import streamlit as st
 import itertools
 from collections import defaultdict
-import networkx as nx
+try:
+    import networkx as nx
+except ModuleNotFoundError:
+    nx = None
 import matplotlib.pyplot as plt
 
 # ==============================
@@ -260,7 +263,9 @@ with col2:
 st.subheader("🕸️ Mappa interessi ↔ lavori")
 
 with st.expander("Mostra mappa interattiva"):
-    if scored:
+    if nx is None:
+        st.error("La libreria 'networkx' non è installata. Aggiungi 'networkx' al file requirements.txt su Streamlit Cloud e fai redeploy.")
+    elif scored:
         G = nx.Graph()
 
         # nodi interessi
@@ -273,7 +278,7 @@ with st.expander("Mostra mappa interattiva"):
             G.add_node(job["name"], node_type="job")
             for tag in job["tags"]:
                 if tag in interests:
-                    G.add_edge(iֆ:=tag, job["name"])
+                    G.add_edge(tag, job["name"])
 
         fig = plt.figure(figsize=(10, 7))
         pos = nx.spring_layout(G, seed=42)
